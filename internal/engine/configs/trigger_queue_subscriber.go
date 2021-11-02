@@ -12,9 +12,11 @@ import (
 	"github.com/tilt-dev/tilt/internal/controllers/apis/configmap"
 	"github.com/tilt-dev/tilt/internal/store"
 	"github.com/tilt-dev/tilt/pkg/apis/core/v1alpha1"
+	"github.com/tilt-dev/tilt/pkg/logger"
+	"github.com/tilt-dev/tilt/pkg/model"
+	"github.com/tilt-dev/tilt/pkg/model/logstore"
 )
 
-// Replicates the TriggerQueue back to the API server.
 type TriggerQueueSubscriber struct {
 	client     ctrlclient.Client
 	lastUpdate *v1alpha1.ConfigMap
@@ -52,6 +54,10 @@ func (s *TriggerQueueSubscriber) OnChange(ctx context.Context, st store.RStore, 
 		return nil
 	}
 
+	// anything removed here won't be reflected in this api update,
+	// but it'll cause a store change and be picked up on the next pass
+	removeDisabledManifests(ctx, st)
+
 	cm := s.fromState(st)
 	if s.lastUpdate != nil && apicmp.DeepEqual(cm.Data, s.lastUpdate.Data) {
 		return nil
@@ -70,3 +76,26 @@ func (s *TriggerQueueSubscriber) OnChange(ctx context.Context, st store.RStore, 
 	s.lastUpdate = &obj
 	return nil
 }
+
+func removeDisabledManifests(ctx context.Context, st store.RStore) {
+	state := st.RLockState()
+	defer st.RUnlockState()
+
+	for _, mn := range state.TriggerQueue {
+		if uir, ok := state.UIResources[string(mn)]; ok {
+			if uir.Status.DisableStatus.DisabledCount > 0 {
+				spanID := logstore.SpanID(fmt.Sprintf("unqueue:%s", mn))
+				msg := fmt.Sprintf("Will not build resource %q: it is disabled", mn)
+				st.Dispatch(store.NewLogAction(mn, spanID, logger.InfoLvl, nil, []byte(msg)))
+
+				st.Dispatch(RemoveFromTriggerQueueAction{Name: mn})
+			}
+		}
+	}
+}
+
+type RemoveFromTriggerQueueAction struct {
+	Name model.ManifestName
+}
+
+func (RemoveFromTriggerQueueAction) Action() {}

@@ -15,6 +15,7 @@ import (
 	"github.com/tilt-dev/tilt/internal/controllers/core/filewatch"
 	ctrltiltfile "github.com/tilt-dev/tilt/internal/controllers/core/tiltfile"
 	"github.com/tilt-dev/tilt/internal/dockercompose"
+	"github.com/tilt-dev/tilt/internal/engine/configs"
 	"github.com/tilt-dev/tilt/internal/engine/dcwatch"
 	"github.com/tilt-dev/tilt/internal/engine/k8swatch"
 	"github.com/tilt-dev/tilt/internal/engine/local"
@@ -150,6 +151,8 @@ func upperReducerFn(ctx context.Context, state *store.EngineState, action store.
 		handleDockerComposeEvent(ctx, state, action)
 	case server.AppendToTriggerQueueAction:
 		state.AppendToTriggerQueue(action.Name, action.Reason)
+	case configs.RemoveFromTriggerQueueAction:
+		state.RemoveFromTriggerQueue(action.Name)
 	case hud.DumpEngineStateAction:
 		handleDumpEngineStateAction(ctx, state)
 	case store.AnalyticsUserOptAction:
