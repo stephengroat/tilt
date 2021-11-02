@@ -309,6 +309,8 @@ func (ibd *ImageBuildAndDeployer) deploy(
 	ps.StartBuildStep(ctx, "Injecting images into Kubernetes YAML")
 
 	kTargetNN := types.NamespacedName{Name: kTargetID.Name.String()}
+	// Note: `KubernetesApply` object may not exist yet when this `ForceApply` is called
+	// and may cause a race-condition-related "Not found" error here.
 	status, err := ibd.r.ForceApply(ctx, kTargetNN, spec, imageMaps)
 	if err != nil {
 		return store.K8sBuildResult{}, fmt.Errorf("applying %s: %v", kTargetID, err)
